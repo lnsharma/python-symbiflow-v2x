@@ -3,3 +3,4 @@ channels:
   - symbiflow
 dependencies:
   - yosys
+  - surelog
