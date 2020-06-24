@@ -52,17 +52,43 @@ def get_yosys():
     return None
 
 
+def determine_select_prefix():
+    """
+    Older and newer versions of Yosys exhibit different behavior of the
+    'select' command regarding black/white boxes. Newer version requires a
+    prefix before some queries. This function determines whether the prefix
+    is required or not.
+    """
+
+    # Query help string of the select command
+    cmd = ["-p", "help select"]
+    stdout = get_output(cmd, no_common_args=True)
+
+    # Look for the phrase. If found then the prefix is required
+    PHRASE = "prefix the pattern with '='"
+    if PHRASE in stdout:
+        return "="
+
+    # No prefix needed
+    return ""
+
+
 def get_yosys_common_args():
     return ["-e", "wire '[^']*' is assigned in a block", "-q"]
 
 
-def get_output(params):
+def get_output(params, no_common_args=False):
     """Run Yosys with given command line parameters, and return
     stdout as a string. Raises CalledProcessError on a non-zero exit code."""
 
     verbose = get_verbose()
 
-    cmd = [get_yosys()] + get_yosys_common_args() + params
+    cmd = [get_yosys()]
+    if not no_common_args:
+        cmd += get_yosys_common_args()
+
+    cmd += params
+
     if verbose:
         msg = ""
         msg += "command".ljust(9).ljust(80, "=") + "\n"
@@ -262,7 +288,7 @@ def do_select(infiles, module, expr, prep=False, flatten=False):
     return pins
 
 
-def get_combinational_sinks(infiles, module, innet):
+def get_combinational_sinks(infiles, module, innet, prefix=""):
     """Return a list of output ports which are combinational sinks of a given
     input.
 
@@ -273,11 +299,15 @@ def get_combinational_sinks(infiles, module, innet):
     innet: Name of input net to find sinks of
     """
     return do_select(
-        infiles, module, "{} %co* o:* %i {} %d".format(innet, innet)
+        infiles, module,
+        "{prefix}{net} %co* {prefix}o:* %i {prefix}{net} %d".format(
+            prefix=prefix,
+            net=innet
+        )
     )
 
 
-def list_clocks(infiles, module):
+def list_clocks(infiles, module, prefix=""):
     """Return a list of clocks in the module
 
     Inputs
@@ -287,11 +317,14 @@ def list_clocks(infiles, module):
     """
     return do_select(
         infiles, module,
-        "c:* %x:+[CLK]:+[clk]:+[clock]:+[CLOCK] c:* %d x:* %i"
+        "{prefix}c:* %x:+[CLK]:+[clk]:+[clock]:+[CLOCK] {prefix}c:* "
+        "%d {prefix}x:* %i".format(
+            prefix=prefix
+        )
     )
 
 
-def get_clock_assoc_signals(infiles, module, clk):
+def get_clock_assoc_signals(infiles, module, clk, prefix=""):
     """Return the list of signals associated with a given clock.
 
     Inputs
@@ -302,8 +335,11 @@ def get_clock_assoc_signals(infiles, module, clk):
     """
     return do_select(
         infiles, module,
-        "select -list {} %a %co* %x i:* o:* %u %i a:ASSOC_CLOCK={} %u {} %d".
-        format(clk, clk, clk)
+        "select -list {prefix}{clk} %a %co* %x {prefix}i:* {prefix}o:* %u %i "
+        "{prefix}a:ASSOC_CLOCK={clk} %u {prefix}{clk} %d".format(
+            prefix=prefix,
+            clk=clk
+        )
     )
 
 
@@ -317,7 +353,7 @@ def get_clock_assoc_signals(infiles, module, clk):
 # select -list w:*INPUT_CLK %a %co* %x x:* %i
 
 
-def get_related_output_for_input(infiles, module, signal):
+def get_related_output_for_input(infiles, module, signal, prefix=""):
     """.
 
     Inputs
@@ -327,11 +363,15 @@ def get_related_output_for_input(infiles, module, signal):
     clk: Name of clock to find associated signals
     """
     return do_select(
-        infiles, module, "select -list w:*{} %a %co* o:* %i".format(signal)
+        infiles, module, "select -list {prefix}w:*{signal} %a %co* "
+        "{prefix}o:* %i".format(
+            prefix=prefix,
+            signal=signal
+        )
     )
 
 
-def get_related_inputs_for_input(infiles, module, signal):
+def get_related_inputs_for_input(infiles, module, signal, prefix=""):
     """.
 
     Inputs
@@ -343,6 +383,10 @@ def get_related_inputs_for_input(infiles, module, signal):
     return [
         x for x in do_select(
             infiles, module,
-            "select -list w:*{} %a %co* %x i:* %i".format(signal)
+            "select -list {prefix}w:*{signal} %a %co* %x {prefix}i:* "
+            "%i".format(
+                prefix=prefix,
+                signal=signal
+            )
         ) if x != signal
     ]
