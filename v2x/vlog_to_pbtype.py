@@ -981,7 +981,7 @@ def make_leaf_pb(outfile, yj, mod, mod_pname, pb_type_xml):
 
 def make_pb_type(
         infiles, outfile, yj, mod, mode_processing=False,
-        mode_xml=None, mode_name=None
+        mode_xml=None, mode_name=None, select_prefix=""
 ):
     """Build the pb_type for a given module. mod is the YosysModule object to
     generate."""
@@ -1061,7 +1061,7 @@ def make_pb_type(
         ET.SubElement(pb_type_xml, "pb_class", {}).text = pb_attrs["class"]
 
     # Create the pins for this pb_type
-    clocks = set(run.list_clocks(infiles, mod.name))
+    clocks = set(run.list_clocks(infiles, mod.name, prefix=select_prefix))
 
     # Add extra clocks inferred from port names
     # Mask out clocks with the attribute "CLOCK" not equal to 1
@@ -1125,7 +1125,7 @@ def make_pb_type(
             # The mode has children, recurse
             else:
                 make_pb_type(infiles, outfile, mode_yj, mode_mod,
-                             True, mode_xml, smode)
+                             True, mode_xml, smode, select_prefix)
                 inter.update(mode_interconnects(mod, smode))
 
             # Add or update the interconnect.
@@ -1162,6 +1162,10 @@ def make_pb_type(
 
 
 def vlog_to_pbtype(infiles, outfile, top=None):
+
+    # Check if Yosys requires 'select' prefix
+    select_prefix = run.determine_select_prefix()
+
     iname = os.path.basename(infiles[0])
 
     run.add_define("PB_TYPE")
@@ -1187,7 +1191,8 @@ def vlog_to_pbtype(infiles, outfile, top=None):
 
     tmod = yj.module(top)
 
-    pb_type_xml = make_pb_type(infiles, outfile, yj, tmod)
+    pb_type_xml = make_pb_type(
+        infiles, outfile, yj, tmod, select_prefix=select_prefix)
 
     return ET.tostring(
         pb_type_xml,

@@ -33,7 +33,7 @@ from .yosys import utils as utils
 from .xmlinc import xmlinc
 
 
-def is_clock_assoc(infiles, module, clk, port, direction):
+def is_clock_assoc(infiles, module, clk, port, direction, prefix=""):
     """Checks if a specific port is associated with a clk clock
 
     Returns a boolean value
@@ -41,12 +41,12 @@ def is_clock_assoc(infiles, module, clk, port, direction):
     is_clock_assoc: bool
     """
     clock_assoc_signals = run.get_clock_assoc_signals(
-        infiles, module, clk
+        infiles, module, clk, prefix=prefix
     )
 
     if direction == "input":
         assoc_outputs = run.get_related_output_for_input(
-            infiles, module, port
+            infiles, module, port, prefix=prefix
         )
         for out in assoc_outputs:
             if out in clock_assoc_signals:
@@ -80,6 +80,10 @@ def is_registered_path(tmod, pin, pout):
 
 
 def vlog_to_model(infiles, includes, top, outfile=None):
+
+    # Check if Yosys requires 'select' prefix
+    select_prefix = run.determine_select_prefix()
+
     iname = os.path.basename(infiles[0])
 
     if outfile is None:
@@ -172,7 +176,7 @@ def vlog_to_model(infiles, includes, top, outfile=None):
             inports_xml = ET.SubElement(model_xml, "input_ports")
             outports_xml = ET.SubElement(model_xml, "output_ports")
 
-            clocks = run.list_clocks(infiles, top)
+            clocks = run.list_clocks(infiles, top, prefix=select_prefix)
 
             for name, width, bits, iodir in ports:
                 nocomb = tmod.net_attr(name, "NO_COMB")
@@ -184,7 +188,8 @@ def vlog_to_model(infiles, includes, top, outfile=None):
                     is_clock = int(port_attrs["CLOCK"]) != 0
 
                 attrs = dict(name=name)
-                sinks = run.get_combinational_sinks(infiles, top, name)
+                sinks = run.get_combinational_sinks(
+                    infiles, top, name, prefix=select_prefix)
 
                 # Removes comb sinks if path from in to out goes through a dff
                 for sink in sinks:
@@ -200,7 +205,10 @@ def vlog_to_model(infiles, includes, top, outfile=None):
                     if len(sinks) > 0 and iodir == "input" and nocomb is None:
                         attrs["combinational_sink_ports"] = " ".join(sinks)
                     for clk in clocks:
-                        if is_clock_assoc(infiles, top, clk, name, iodir):
+                        if is_clock_assoc(
+                           infiles, top, clk, name, iodir,
+                           prefix=select_prefix):
+
                             clks.append(clk)
                         if clks:
                             attrs["clock"] = " ".join(clks)
