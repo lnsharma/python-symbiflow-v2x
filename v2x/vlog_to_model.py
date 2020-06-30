@@ -10,6 +10,12 @@ The following Verilog attributes are considered on ports:
     - `(* ASSOC_CLOCK="RDCLK" *)` : force a port's associated
                                     clock to a given value
 
+    - `(* NO_COMB *)` : Forces removal of all combinational relations of an
+                        input port.
+
+    - `(* NO_SEQ *)` : Forces removal of all sequential relations of an input
+                       port.
+
 The following Verilog attributes are considered on modules:
     - `(* MODEL_NAME="model" *)` : override the name used for
     <model> and for ".subckt name" in the BLIF model. Mostly
@@ -179,7 +185,8 @@ def vlog_to_model(infiles, includes, top, outfile=None):
             clocks = run.list_clocks(infiles, top, prefix=select_prefix)
 
             for name, width, bits, iodir in ports:
-                nocomb = tmod.net_attr(name, "NO_COMB")
+                no_comb = tmod.net_attr(name, "NO_COMB")
+                no_seq = tmod.net_attr(name, "NO_SEQ")
 
                 is_clock = name in clocks or utils.is_clock_name(name)
 
@@ -202,7 +209,7 @@ def vlog_to_model(infiles, includes, top, outfile=None):
                     attrs["is_clock"] = "1"
                 else:
                     clks = list()
-                    if len(sinks) > 0 and iodir == "input" and nocomb is None:
+                    if len(sinks) > 0 and iodir == "input" and no_comb is None:
                         attrs["combinational_sink_ports"] = " ".join(sinks)
                     for clk in clocks:
                         if is_clock_assoc(
@@ -210,7 +217,7 @@ def vlog_to_model(infiles, includes, top, outfile=None):
                            prefix=select_prefix):
 
                             clks.append(clk)
-                        if clks:
+                        if clks and no_seq is None:
                             attrs["clock"] = " ".join(clks)
                 if iodir == "input":
                     ET.SubElement(inports_xml, "port", attrs)
