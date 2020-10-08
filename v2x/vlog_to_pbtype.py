@@ -43,6 +43,10 @@ The following are allowed on nets within modules
     - `(* carry = ADDER *)` : specify carry chain pack_pattern associated
                               with this wire
 
+    - `(* PACK = "<name1>[;<name2>[..]]" *)` : List of semicolon-separated
+                                               pack pattern names to be used
+                                               for a wire.
+
 The following are allowed on ports:
     - `(* CLOCK *)` or `(* CLOCK=1 *)` : force a given port to be a clock
 
@@ -408,16 +412,18 @@ def make_direct_conn(
     create_port(dir_xml, driver, "input")
     create_port(dir_xml, sink, "output")
 
-    pack_name = path_attr.get('pack', False)
-    if pack_name:
-        pp_xml = ET.SubElement(
-            dir_xml, 'pack_pattern', {
-                'name': pack_name,
-                'type': 'pack'
-            }
-        )
-        create_port(pp_xml, driver, "input")
-        create_port(pp_xml, sink, "output")
+    # Pack patterns
+    pack = path_attr.get('pack', path_attr.get('PACK', None))
+    if pack is not None:
+        for pack_name in pack.split(";"):
+            pp_xml = ET.SubElement(
+                dir_xml, 'pack_pattern', {
+                    'name': pack_name,
+                    'type': 'pack'
+                }
+            )
+            create_port(pp_xml, driver, "input")
+            create_port(pp_xml, sink, "output")
 
     carry_name = path_attr.get('carry', None)
     if carry_name:
@@ -933,9 +939,6 @@ def make_leaf_pb(outfile, yj, mod, mod_pname, pb_type_xml):
                         port, iodir)
                 attrs["max"] = splitspec[1]
             else:
-                assert iodir == "input", \
-                    "Only input ports can have {} timing definition."
-                "Port {}, direction {}.".format(xmltype, port, iodir)
                 attrs["value"] = splitspec[1]
             ET.SubElement(xml_parent, xmltype, attrs)
 
@@ -1008,8 +1011,6 @@ def make_pb_type(
 
     # Process type and class of module
     model_name = mod.attr("MODEL_NAME", mod.name)
-    assert model_name == model_name.upper(
-    ), "Model name should be uppercase. {}".format(model_name)
     mod_cls = mod.CLASS
     if mod_cls is not None:
         if mod_cls == "input":
